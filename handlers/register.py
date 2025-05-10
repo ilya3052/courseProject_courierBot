@@ -9,6 +9,8 @@ from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import Message
 from psycopg import sql
 
+from icecream import ic
+
 from shared.database import Database
 
 router = Router()
@@ -21,22 +23,42 @@ class Register(StatesGroup):
 
 @router.message(StateFilter(None), Command("start"))
 async def cmd_start(message: Message, state: FSMContext):
-    # проверка на валидность ссылки
     connect: ps.connect = Database.get_connection()
-    try:
+    # проверка на существование пользователя
+    with connect.cursor() as cur:
+        try:
+            get_user_id = sql.SQL("SELECT user_id FROM users WHERE user_tgchat_id = {} AND user_role = 'courier'")
+            user_id = cur.execute(get_user_id.format(message.chat.id)).fetchone()
+        except ps.Error as p:
+            await message.answer(f"Произошла ошибка при выполнении запроса: {p}")
+            return
+
+    if user_id:
         with connect.cursor() as cur:
-            select_chat_id = sql.SQL("SELECT 1 FROM users WHERE user_tgchat_id = {}")
-            is_link_valid = cur.execute(select_chat_id.format(message.text.split()[1])).fetchone()
-    except IndexError:
-        await message.answer("Ссылка недействительна, пожалуйста, получите действующую у администратора")
+            try:
+                get_username = sql.SQL("SELECT user_name FROM users WHERE user_tgchat_id = {} AND user_role = 'courier'")
+                username = cur.execute(get_username.format(message.chat.id)).fetchone()[0]
+            except ps.Error as p:
+                await message.answer(f"Произошла ошибка при выполнении запроса: {p}")
+                return
+        await message.answer(f"Добро пожаловать, {username}!")
         return
+
+    # проверка на валидность ссылки
+    with connect.cursor() as cur:
+        try:
+            get_chat_id = sql.SQL("SELECT 1 FROM users WHERE user_tgchat_id = {} AND user_role = 'courier'")
+            is_link_valid = cur.execute(get_chat_id.format(message.text.split()[1])).fetchone()
+        except ps.Error as p:
+            await message.answer(f"Произошла ошибка при выполнении запроса: {p}")
+            return
 
     if is_link_valid is None:
         await message.answer("Ссылка недействительна, пожалуйста, получите действующую у администратора")
     else:
         await message.answer("Введите имя в формате ФИО (отчество при наличии)")
         await state.set_state(Register.enter_name)
-        await state.update_data(last_chat_id=message.text.split()[1])
+        await state.update_data(chat_id_stub=message.text.split()[1])
         await state.update_data(chat_id=message.chat.id)
         logging.info("Введено имя")
 
@@ -84,7 +106,7 @@ def insert_data(data: dict):
             cur.execute(
                 update_user.format(
                     data['chat_id'], data['name'][1], data['name'][0],
-                    data['name'][2] if len(data['name']) > 2 else None, data['phonenumber'], data['last_chat_id']
+                    data['name'][2] if len(data['name']) > 2 else None, data['phonenumber'], data['chat_id_stub']
                 ))
             user_id = cur.fetchone()[0]
             cur.execute(insert_courier.format(

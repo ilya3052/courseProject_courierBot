@@ -1,0 +1,175 @@
+import logging
+
+import asyncio
+from aiogram import Router, F
+from aiogram.exceptions import TelegramBadRequest
+from aiogram.filters import Command, StateFilter
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import StatesGroup, State
+from aiogram.types import Message, CallbackQuery
+from icecream import ic
+from datetime import datetime as dt
+
+from keyboards import get_profile_kb, get_deliveries_kb
+from shared.database import Database
+
+import psycopg as ps
+from psycopg import sql
+
+from decimal import Decimal
+
+router = Router()
+quantize = Decimal('.01')
+page_size = 10
+
+
+class ProfileState(StatesGroup):
+    show_profile = State()
+    show_deliveries = State()
+
+
+@router.message(Command("profile"))
+async def profile_handler(message: Message, state: FSMContext):
+    """
+    Обращение по типу "добрый день/вечер/ночь (взять из клиентского)
+    Количество выполненных заказов
+    Текущий рейтинг
+    Номер текущей доставки (если существует)
+    Клавиатура:
+        Все доставки
+    :param state:
+    :param message:
+    :return:
+    """
+    if state != ProfileState.show_profile:
+        await state.set_state(ProfileState.show_profile)
+    msg, courier_id = await get_courier_info(message.chat.id)
+    await state.set_state(ProfileState.show_profile)
+    await state.update_data(courier_id=courier_id)
+    await message.answer(text=msg, reply_markup=get_profile_kb())
+
+
+@router.callback_query(F.data.startswith("action_"), StateFilter(ProfileState.show_profile))
+async def actions_handler(callback: CallbackQuery, state: FSMContext):
+    """
+    Выводит список всех доставок:
+        номер, количество товаров, статус, оценка (если завершена)
+    :param state:
+    :param callback:
+    :return:
+    """
+    data = await state.get_data()
+    page = data.get("page", 0)
+    deliveries = data.get("deliveries", [])
+    max_page = max((len(deliveries) - 1) // page_size, 0)
+    match callback.data.split("_")[1]:
+        case "back":
+            if page > 0:
+                page -= 1
+        case "next":
+            if page < max_page:
+                page += 1
+    await show_deliveries(callback, state, page)
+
+
+async def show_deliveries(callback: CallbackQuery, state: FSMContext, page: int = 0):
+    connect: ps.connect = Database.get_connection()
+    data = await state.get_data()
+    courier_id = data.get('courier_id')
+    get_deliveries_list = (sql.SQL(
+        """SELECT d.delivery_id, o.order_status, COUNT(a.product_article), 
+            CASE WHEN o.order_status = 2 THEN d.delivery_rating::VARCHAR ELSE 'Доставка не завершена' END AS rating 
+            FROM delivery d JOIN "order" o ON d.order_id = o.order_id 
+            JOIN added a ON o.order_id = a.order_id WHERE d.courier_id = {}
+            GROUP BY d.delivery_id, o.order_status
+            ORDER BY d.delivery_rating;
+    """
+    ))
+    with connect.cursor() as cur:
+        try:
+            deliveries_list = cur.execute(get_deliveries_list.format(courier_id)).fetchall()
+        except ps.Error as p:
+            logging.exception(f"Произошла ошибка при выполнении запроса: {p}")
+    total = len(deliveries_list)
+    max_page = max((total - 1) // page_size, 0)
+    start = page * page_size
+    end = start + page_size
+    page_data = deliveries_list[start:end]
+
+    if not page_data:
+        await callback.message.edit_text("Нет доставок для отображения.")
+        return
+
+    msg_lines = [
+        f"Доставка №{d[0]}\n"
+        f"\t\tСтатус: {("В пути" if d[1] == 1 else "Доставлена получателю")}\n"
+        f"\t\tКоличество товаров: {d[2]}"
+        f"{f"\n\t\tОценка: {d[3]}" if d[1] == 2 else ""}"
+        for d in page_data
+    ]
+    msg_text = "\n\n".join(msg_lines)
+
+    await state.update_data(page=page, deliveries=deliveries_list)
+
+    try:
+        await callback.message.edit_text(
+            text=f"Ваши доставки (стр. {page + 1}/{max_page + 1}):\n\n{msg_text}",
+            reply_markup=get_deliveries_kb()  # ← твоя клавиатура
+        )
+    except TelegramBadRequest as TBR:
+        logging.exception(f"Произошла ошибка при выполнении запроса {TBR}")
+    await callback.answer()
+
+
+async def get_courier_info(tgchat_id: int) -> (str, int):
+    connect: ps.connect = Database.get_connection()
+
+    get_courier_id = sql.SQL(
+        "SELECT courier_id FROM courier c JOIN users u ON c.user_id = u.user_id WHERE u.user_tgchat_id = {}")
+
+    get_courier_name = sql.SQL("SELECT user_name FROM users WHERE user_tgchat_id = {} AND user_role = 'courier';")
+
+    get_finished_order_count = (sql.SQL(
+        "SELECT COUNT(*) FROM \"order\" o JOIN delivery d on o.order_id = d.order_id WHERE d.courier_id = {} AND o.order_status = 2;"
+    ))
+
+    get_courier_rating = sql.SQL("SELECT courier_rating FROM courier WHERE courier_id = {};")
+
+    get_current_order_number = (sql.SQL(
+        "SELECT d.delivery_id FROM delivery d JOIN \"order\" o ON d.order_id = o.order_id WHERE o.order_status = 1 AND d.courier_id = {}"
+    ))
+
+    with connect.cursor() as cur:
+        try:
+            courier_id = cur.execute(get_courier_id.format(tgchat_id)).fetchone()[0]
+            courier_name = cur.execute(get_courier_name.format(tgchat_id)).fetchone()[0]
+            courier_rating = cur.execute(get_courier_rating.format(courier_id)).fetchone()[0]
+
+            finished_order_count = cur.execute(get_finished_order_count.format(courier_id)).fetchone()[0]
+            current_order_number = cur.execute(get_current_order_number.format(courier_id)).fetchone()[0]
+
+        except ps.Error as p:
+            logging.info(f"Произошла ошибка при выполнении запроса: {p}")
+
+    time = dt.now().hour
+    greeting = (
+        "Доброй ночи" if 0 <= time < 6 else
+        "Доброе утро" if 6 <= time < 12 else
+        "Добрый день" if 12 <= time < 18 else
+        "Добрый вечер"
+    )
+
+    advice = (
+        "Все замечательно!" if int(courier_rating) == 5 else
+        "Все хорошо!" if 4.60 <= round(courier_rating, 2) < 5.00 else
+        "Обратите внимание!" if 4.10 <= round(courier_rating, 2) < 4.60 else
+        "Доступ к новым заказам временно ограничен! Обратитесь к администратору"
+    )
+
+    hello_message = (f"👋🏼 {greeting}, {courier_name}!\n"
+                     f"⭐ Ваш рейтинг: {Decimal(courier_rating).quantize(quantize).normalize()}.\n{advice}\n\n"
+                     f"🛒 Общее количество выполненных доставок: {finished_order_count}\n"
+                     f"🛒 Текущая доставка: {current_order_number or "не назначена"}\n")
+
+    return hello_message, courier_id
+
