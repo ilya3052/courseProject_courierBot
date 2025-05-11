@@ -1,17 +1,15 @@
 import logging
 
-import asyncio
 from aiogram import Router, F
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import Message, CallbackQuery
-from icecream import ic
 from datetime import datetime as dt
 
 from keyboards import get_profile_kb, get_deliveries_kb
-from shared.database import Database
+from database import Database
 
 import psycopg as ps
 from psycopg import sql

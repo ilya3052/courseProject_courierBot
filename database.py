@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 
+import asyncpg
 import psycopg as ps
 from dotenv import load_dotenv
 from psycopg import AsyncConnection
@@ -33,22 +34,28 @@ class Database:
     async def get_async_connection():
         if Database._async_connect is None:
             try:
-                Database._async_connect = await AsyncConnection.connect(
-                    dbname=os.getenv("DB_NAME"),
+                Database._async_connect = await asyncpg.connect(
                     user=os.getenv("USER"),
                     password=os.getenv("PASSWORD"),
+                    database=os.getenv("DB_NAME"),
                     host=os.getenv("HOST"),
                     port=os.getenv("PORT")
                 )
-                logging.info("Асинхронное соединение установлено")
-            except ps.Error:
-                logging.critical("Асинхронное соединение не установлено!")
+                logging.info("Асинхронное соединение через asyncpg установлено")
+            except Exception as e:
+                logging.critical(f"Асинхронное соединение не установлено: {e}")
                 sys.exit(1)
-            return Database._async_connect
+        return Database._async_connect
 
     @staticmethod
-    def close_connection():
+    async def listen_channel(channel_name: str, callback):
+        conn = await Database.get_async_connection()
+        await conn.add_listener(channel_name, callback)
+        logging.info(f"🔔 Подписка на канал '{channel_name}' установлена")
+
+    @staticmethod
+    async def close_connection():
         if Database._connect is not None:
             Database._connect.close()
         if Database._async_connect is not None:
-            Database._async_connect.close()
+            await Database._async_connect.close()
