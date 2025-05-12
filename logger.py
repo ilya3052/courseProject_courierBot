@@ -1,5 +1,6 @@
-import os
 import logging
+import os
+
 
 def setup_logger():
     log_path = os.path.join(os.path.dirname(__file__), "logs/couriers_bot_logs.log")

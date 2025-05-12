@@ -1,8 +1,7 @@
-from bot import bot
 import psycopg as ps
-from psycopg import sql
 from icecream import ic
 
+from bot import bot
 from database import Database
 
 
@@ -24,6 +23,7 @@ async def get_free_couriers():
     free_couriers = [courier[0] for courier in free_couriers]
     ic(free_couriers)
     await send_notify(free_couriers)
+
 
 def confirm_delivery():
     pass

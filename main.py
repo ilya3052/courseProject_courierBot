@@ -1,7 +1,6 @@
 import asyncio
 
 from bot import setup_bot
-from handlers.deliveries import get_free_couriers
 from logger import setup_logger
 from notify import setup_notifications
 

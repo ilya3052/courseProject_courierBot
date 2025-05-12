@@ -1,8 +1,10 @@
+import logging
 import os
+
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-import logging
+
 from handlers import profile_router, reg_router
 
 bot = Bot(
