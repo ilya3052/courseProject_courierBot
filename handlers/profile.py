@@ -1,20 +1,18 @@
 import logging
+from datetime import datetime as dt
+from decimal import Decimal
 
+import psycopg as ps
 from aiogram import Router, F
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import Message, CallbackQuery
-from datetime import datetime as dt
-
-from keyboards import get_profile_kb, get_deliveries_kb
-from database import Database
-
-import psycopg as ps
 from psycopg import sql
 
-from decimal import Decimal
+from database import Database
+from keyboards import get_profile_kb, get_deliveries_kb
 
 router = Router()
 quantize = Decimal('.01')
