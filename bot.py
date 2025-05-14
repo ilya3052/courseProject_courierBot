@@ -1,20 +1,10 @@
-import os
-from aiogram import Bot, Dispatcher
-from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
 import logging
-from handlers import profile_router, reg_router
+from handlers import profile_router, reg_router, deliveries_router
+from bot_instance import bot, dp
 
-bot = Bot(
-    token=os.getenv("BOT_TOKEN"),
-    default=DefaultBotProperties(
-        parse_mode=ParseMode.HTML
-    )
-)
-
-dp = Dispatcher()
 dp.include_router(reg_router)
 dp.include_router(profile_router)
+dp.include_router(deliveries_router)
 
 
 async def setup_bot():
