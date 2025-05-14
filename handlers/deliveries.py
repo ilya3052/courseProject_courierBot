@@ -74,6 +74,7 @@ async def order_accept_handler(callback: CallbackQuery, state: FSMContext):
     connect: ps.connect = Database.get_connection()
     order_id = callback.data.split(":")[1]
     ic(order_id)
+    #апчихба
     data = await state.get_data()
 
     try:
