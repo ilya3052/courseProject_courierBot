@@ -5,7 +5,7 @@ import sys
 import asyncpg
 import psycopg as ps
 from dotenv import load_dotenv
-from psycopg import AsyncConnection
+from psycopg import AsyncConnection, IsolationLevel
 
 load_dotenv()
 
@@ -25,6 +25,7 @@ class Database:
                     host=os.getenv("HOST"),
                     port=os.getenv("PORT")
                 )
+                Database._connect.set_isolation_level(IsolationLevel.READ_COMMITTED)
             except ps.Error:
                 logging.critical("Соединение не установлено!")
                 sys.exit(1)
@@ -51,11 +52,22 @@ class Database:
     async def listen_channel(channel_name: str, callback):
         conn = await Database.get_async_connection()
         await conn.add_listener(channel_name, callback)
-        logging.info(f"🔔 Подписка на канал '{channel_name}' установлена")
+        logging.info(f"Подписка на канал '{channel_name}' установлена")
+
+    @staticmethod
+    async def notify_channel(channel_name: str, payload: str):
+        conn = await Database.get_async_connection()  # безопасно экранирует строку
+        payload_escaped = payload.replace("'", "''")  # экранируем одинарные кавычки
+        sql = f"NOTIFY {channel_name}, '{payload_escaped}';"
+
+        await conn.execute(sql)
+        logging.info(f"Отправлено уведомление на канал '{channel_name}': {payload}")
 
     @staticmethod
     async def close_connection():
         if Database._connect is not None:
             Database._connect.close()
+            Database._connect = None
         if Database._async_connect is not None:
             await Database._async_connect.close()
+            Database._async_connect = None
