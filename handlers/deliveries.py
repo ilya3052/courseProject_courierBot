@@ -19,6 +19,7 @@ router = Router()
 class Deliveries(StatesGroup):
     confirm = State()
 
+
 async def get_notify(conn, pid, channel, payload):
     order_id = int(str(payload).split(":")[1].strip())
     print(f"[{channel}] => {payload} => {order_id}")
@@ -53,7 +54,6 @@ WHERE o.order_id = {};"""))
             product_count = cur.execute(get_product_count.format(order_id)).fetchone()[0]
             product_total_price = cur.execute(get_product_total_price.format(order_id)).fetchone()[0]
             products_list = cur.execute(get_product_list.format(order_id)).fetchall()
-            ic(product_count, product_total_price, products_list)
         except ps.Error as p:
             logging.exception(f"Произошла ошибка при выполнении запроса: {p}")
 
@@ -69,24 +69,47 @@ WHERE o.order_id = {};"""))
                                reply_markup=get_order_notify_kb(order_id))
 
 
+# ОФОРМИТЬ КАК ТРАНЗАКЦИЮ ВНУТРИ ПОСТГРЕСА
 @router.callback_query(F.data.startswith("action_accept"))
 async def order_accept_handler(callback: CallbackQuery, state: FSMContext):
     connect: ps.connect = Database.get_connection()
+
     order_id = callback.data.split(":")[1]
-    ic(order_id)
-    #апчихба
-    data = await state.get_data()
+
+    get_courier_id = (sql.SQL(
+        "SELECT c.courier_id FROM courier c JOIN users u ON c.user_id = u.user_id WHERE u.user_tgchat_id = {} AND u.user_role = 'courier'"
+    ))
+    try:
+        with connect.cursor() as cur:
+            courier_id = cur.execute(get_courier_id.format(callback.message.chat.id)).fetchone()[0]
+    except ps.Error as p:
+        logging.exception(f"Произошла ошибка при выполнении запроса: {p}")
 
     try:
-        with connect.transaction(isolation_level=IsolationLevel.READ_COMMITTED):
-            connect.execute("SELECT 1 FROM \"order\" WHERE order.order_id = {} FOR UPDATE NOWAIT;".format(order_id))
+        with connect.cursor() as cur:
+            order_status = cur.execute(
+                "SELECT order_status FROM \"order\" WHERE order_id = {} FOR UPDATE NOWAIT;".format(
+                    order_id)).fetchone()[0]
+            if order_status is None or order_status != 0:
+                await callback.answer("Невозможно принять этот заказ!")
+                connect.rollback()
+                return
+            cur.execute("INSERT INTO delivery (courier_id, order_id) VALUES ({}, {});".format(courier_id, order_id))
+            cur.execute("UPDATE courier SET courier_is_busy_with_order = true WHERE courier_id = {};".format(courier_id))
+            cur.execute("UPDATE \"order\" SET order_status = 1 WHERE order_id = {};".format(order_id))
+            connect.commit()
+            await Database.notify_channel("order_accept", f'order_id: {order_id}')
+            await callback.answer()
     except LockNotAvailable:
-        pass
-
-    ic(callback.data.split("_"))
+        connect.rollback()
+        await callback.answer("Заказ уже принят другим курьером!")
 
     await callback.answer()
 
+@router.callback_query(F.data.startswith("action_cancel"))
+async def order_cancel_handler(callback: CallbackQuery):
+    print("Отказ от заказа")
+    await callback.message.delete()
 
 async def get_free_couriers():
     connect: ps.connect = Database.get_connection()
@@ -94,11 +117,10 @@ async def get_free_couriers():
         free_couriers = cur.execute(
             """SELECT u.user_tgchat_id 
                     FROM courier c 
-	                JOIN users u ON c.user_id = c.user_id 
+	                JOIN users u ON c.user_id = u.user_id 
                 WHERE c.courier_is_busy_with_order = false AND u.user_role = 'courier';"""
         ).fetchall()
     free_couriers = [courier[0] for courier in free_couriers]
-    ic(free_couriers)
     return free_couriers
 
 
