@@ -168,4 +168,3 @@ async def get_courier_info(tgchat_id: int) -> (str, int):
                      f"🛒 Текущая доставка: {current_order_number or "не назначена"}\n")
 
     return hello_message, courier_id
-

@@ -1,6 +1,8 @@
 import logging
-from handlers import profile_router, reg_router, deliveries_router
+
 from bot_instance import bot, dp
+from handlers import profile_router, reg_router, deliveries_router
+
 
 async def setup_bot():
     dp.include_router(reg_router)

@@ -34,7 +34,8 @@ async def cmd_start(message: Message, state: FSMContext):
     if user_id:
         with connect.cursor() as cur:
             try:
-                get_username = sql.SQL("SELECT user_name FROM users WHERE user_tgchat_id = {} AND user_role = 'courier'")
+                get_username = sql.SQL(
+                    "SELECT user_name FROM users WHERE user_tgchat_id = {} AND user_role = 'courier'")
                 username = cur.execute(get_username.format(message.chat.id)).fetchone()[0]
             except ps.Error as p:
                 await message.answer(f"Произошла ошибка при выполнении запроса: {p}")

@@ -5,8 +5,7 @@ from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery
-from icecream import ic
-from psycopg import sql, IsolationLevel
+from psycopg import sql
 from psycopg.errors import LockNotAvailable
 
 from bot_instance import bot
@@ -95,7 +94,8 @@ async def order_accept_handler(callback: CallbackQuery, state: FSMContext):
                 connect.rollback()
                 return
             cur.execute("INSERT INTO delivery (courier_id, order_id) VALUES ({}, {});".format(courier_id, order_id))
-            cur.execute("UPDATE courier SET courier_is_busy_with_order = true WHERE courier_id = {};".format(courier_id))
+            cur.execute(
+                "UPDATE courier SET courier_is_busy_with_order = true WHERE courier_id = {};".format(courier_id))
             cur.execute("UPDATE \"order\" SET order_status = 1 WHERE order_id = {};".format(order_id))
             connect.commit()
             await Database.notify_channel("order_accept", f'order_id: {order_id}')
@@ -106,10 +106,12 @@ async def order_accept_handler(callback: CallbackQuery, state: FSMContext):
 
     await callback.answer()
 
+
 @router.callback_query(F.data.startswith("action_cancel"))
 async def order_cancel_handler(callback: CallbackQuery):
     print("Отказ от заказа")
     await callback.message.delete()
+
 
 async def get_free_couriers():
     connect: ps.connect = Database.get_connection()
