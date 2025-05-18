@@ -77,15 +77,16 @@ async def enter_phonenumber(message: Message, state: FSMContext):
         await state.update_data(phonenumber=message.text)
         data = await state.get_data()
         await state.clear()
-        await message.answer(f"Регистрация завершена. Можете приступать к работе.")
-        insert_data(data)
-        logging.info("Регистрация завершена")
-
+        if insert_data(data):
+            logging.info("Регистрация завершена")
+            await message.answer(f"Регистрация завершена. Можете приступать к работе.")
+        else:
+            await message.answer("Регистрация не завершена, попробуйте еще раз получив у администратора новую ссылку!")
     else:
         await message.answer("Неправильный формат ввода, попробуйте еще раз!")
 
 
-def insert_data(data: dict):
+def insert_data(data: dict) -> bool:
     connect: ps.connect = Database.get_connection()
     data['phonenumber'] = (data['phonenumber'].replace('(', '')
                            .replace(')', '')
@@ -113,6 +114,11 @@ def insert_data(data: dict):
             ))
             connect.commit()
             logging.info("Запрос выполнен")
+            return True
         except ps.Error as e:
             connect.rollback()
             logging.critical(f"Запрос не выполнен. {e}")
+        except Exception as e:
+            connect.rollback()
+            logging.exception(f"При выполнении запроса произошла ошибка: {e}")
+            return False
