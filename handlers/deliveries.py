@@ -11,7 +11,7 @@ from psycopg.errors import LockNotAvailable
 from Filters.IsRegistered import IsRegistered
 from core.bot_instance import bot
 from core.database import Database
-from handlers import cmd_start
+from .register import cmd_start
 from keyboards import get_order_notify_kb
 
 router = Router()
