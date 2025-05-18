@@ -64,6 +64,18 @@ class Database:
         logging.info(f"Отправлено уведомление на канал '{channel_name}': {payload}")
 
     @staticmethod
+    async def is_user_registered(user_id):
+        conn = Database.get_connection()
+        try:
+            with conn.cursor() as cur:
+                status = cur.execute(
+                    "SELECT 1 FROM users WHERE user_tgchat_id = {} AND user_role = 'courier';".format(user_id)).fetchone()[
+                    0]
+                if status: return True
+        except TypeError:
+            return False
+
+    @staticmethod
     async def close_connection():
         if Database._connect is not None:
             Database._connect.close()
