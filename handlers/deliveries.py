@@ -4,12 +4,14 @@ import psycopg as ps
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
 from psycopg import sql
 from psycopg.errors import LockNotAvailable
 
+from Filters.IsRegistered import IsRegistered
 from core.bot_instance import bot
 from core.database import Database
+from handlers import cmd_start
 from keyboards import get_order_notify_kb
 
 router = Router()
@@ -73,7 +75,7 @@ WHERE o.order_id = {};"""))
 
 
 # ОФОРМИТЬ КАК ТРАНЗАКЦИЮ ВНУТРИ ПОСТГРЕСА
-@router.callback_query(F.data.startswith("action_accept"))
+@router.callback_query(F.data.startswith("action_accept"), IsRegistered())
 async def order_accept_handler(callback: CallbackQuery, state: FSMContext):
     connect: ps.connect = Database.get_connection()
 
@@ -111,7 +113,7 @@ async def order_accept_handler(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("action_cancel"))
+@router.callback_query(F.data.startswith("action_cancel"), IsRegistered())
 async def order_cancel_handler(callback: CallbackQuery):
     print("Отказ от заказа")
     await callback.message.delete()
@@ -129,6 +131,8 @@ async def get_free_couriers():
     free_couriers = [courier[0] for courier in free_couriers]
     return free_couriers
 
-
-def confirm_delivery():
-    pass
+@router.message(~IsRegistered())
+@router.callback_query(~IsRegistered())
+async def reg_handler(update: Message | CallbackQuery, state: FSMContext):
+    message = update.message if isinstance(update, CallbackQuery) else update
+    await cmd_start(message, state)

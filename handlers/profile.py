@@ -11,7 +11,9 @@ from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import Message, CallbackQuery
 from psycopg import sql
 
+from Filters.IsRegistered import IsRegistered
 from core.database import Database
+from handlers import cmd_start
 from keyboards import get_profile_kb, get_deliveries_kb
 
 router = Router()
@@ -24,7 +26,7 @@ class ProfileState(StatesGroup):
     show_deliveries = State()
 
 
-@router.message(Command("profile"))
+@router.message(Command("profile"), IsRegistered())
 async def profile_handler(message: Message, state: FSMContext):
     """
     Обращение по типу "добрый день/вечер/ночь (взять из клиентского)
@@ -45,7 +47,7 @@ async def profile_handler(message: Message, state: FSMContext):
     await message.answer(text=msg, reply_markup=get_profile_kb())
 
 
-@router.callback_query(F.data.startswith("action_"), StateFilter(ProfileState.show_profile))
+@router.callback_query(F.data.startswith("action_"), StateFilter(ProfileState.show_profile), IsRegistered())
 async def actions_handler(callback: CallbackQuery, state: FSMContext):
     """
     Выводит список всех доставок:
@@ -168,3 +170,9 @@ async def get_courier_info(tgchat_id: int) -> (str, int):
                      f"🛒 Текущая доставка: {current_order_number or "не назначена"}\n")
 
     return hello_message, courier_id
+
+@router.message(~IsRegistered())
+@router.callback_query(~IsRegistered())
+async def reg_handler(update: Message | CallbackQuery, state: FSMContext):
+    message = update.message if isinstance(update, CallbackQuery) else update
+    await cmd_start(message, state)
