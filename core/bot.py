@@ -1,6 +1,6 @@
 import logging
 
-from bot_instance import bot, dp
+from .bot_instance import bot, dp
 from handlers import profile_router, reg_router, deliveries_router
 
 

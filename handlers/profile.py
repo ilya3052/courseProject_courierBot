@@ -11,7 +11,7 @@ from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import Message, CallbackQuery
 from psycopg import sql
 
-from database import Database
+from core.database import Database
 from keyboards import get_profile_kb, get_deliveries_kb
 
 router = Router()

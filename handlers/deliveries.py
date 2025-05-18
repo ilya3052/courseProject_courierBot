@@ -8,8 +8,8 @@ from aiogram.types import CallbackQuery
 from psycopg import sql
 from psycopg.errors import LockNotAvailable
 
-from bot_instance import bot
-from database import Database
+from core.bot_instance import bot
+from core.database import Database
 from keyboards import get_order_notify_kb
 
 router = Router()
@@ -29,6 +29,10 @@ async def send_notify(order_id: int):
     connect: ps.connect = Database.get_connection()
 
     free_couriers = await get_free_couriers()
+
+    if not free_couriers:
+        await Database.notify_channel("order_not_accept", f"action: order_not_accept; order_id: {order_id}")
+        return
 
     get_product_count = (sql.SQL(
         "SELECT COUNT(*) FROM \"order\" o JOIN added a on o.order_id = a.order_id WHERE o.order_id = {};"
@@ -98,7 +102,7 @@ async def order_accept_handler(callback: CallbackQuery, state: FSMContext):
                 "UPDATE courier SET courier_is_busy_with_order = true WHERE courier_id = {};".format(courier_id))
             cur.execute("UPDATE \"order\" SET order_status = 1 WHERE order_id = {};".format(order_id))
             connect.commit()
-            await Database.notify_channel("order_accept", f'order_id: {order_id}')
+            await Database.notify_channel("order_status", f'action: order_accept; order_id: {order_id}')
             await callback.answer()
     except LockNotAvailable:
         connect.rollback()
