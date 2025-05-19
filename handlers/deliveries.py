@@ -11,8 +11,8 @@ from psycopg.errors import LockNotAvailable
 from Filters.IsRegistered import IsRegistered
 from core.bot_instance import bot
 from core.database import Database
-from .register import cmd_start
 from keyboards import get_order_notify_kb
+from .register import cmd_start
 
 router = Router()
 
@@ -36,8 +36,12 @@ async def send_notify(order_id: int):
         await Database.notify_channel("order_not_accept", f"action: order_not_accept; order_id: {order_id}")
         return
 
-    get_product_count = (sql.SQL(
-        "SELECT COUNT(*) FROM \"order\" o JOIN added a on o.order_id = a.order_id WHERE o.order_id = {};"
+    get_product_info = (sql.SQL(
+        """SELECT COUNT(*), o.order_address 
+FROM \"order\" o 
+    JOIN added a on o.order_id = a.order_id 
+    WHERE o.order_id = {}
+GROUP BY o.order_address;"""
     ))
 
     get_product_list = (sql.SQL("""SELECT DISTINCT p.product_name, COUNT(p.product_name), p.product_price 
@@ -56,7 +60,7 @@ WHERE o.order_id = {};"""))
 
     with connect.cursor() as cur:
         try:
-            product_count = cur.execute(get_product_count.format(order_id)).fetchone()[0]
+            product_info = cur.execute(get_product_info.format(order_id)).fetchone()
             product_total_price = cur.execute(get_product_total_price.format(order_id)).fetchone()[0]
             products_list = cur.execute(get_product_list.format(order_id)).fetchall()
         except ps.Error as p:
@@ -70,7 +74,9 @@ WHERE o.order_id = {};"""))
     for courier in free_couriers:
         await bot.send_message(chat_id=courier,
                                text=f'Получен новый заказ!\n'
-                                    f'Количество товаров - {product_count}, сумма заказа - {product_total_price}\n{order_desc}',
+                                    f'Количество товаров - {product_info[0]}\n'
+                                    f'Адрес доставки - {product_info[1]}\n'
+                                    f'Сумма заказа - {product_total_price}\n{order_desc}',
                                reply_markup=get_order_notify_kb(order_id))
 
 
@@ -130,6 +136,7 @@ async def get_free_couriers():
         ).fetchall()
     free_couriers = [courier[0] for courier in free_couriers]
     return free_couriers
+
 
 @router.message(~IsRegistered())
 @router.callback_query(~IsRegistered())
