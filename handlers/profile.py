@@ -148,6 +148,8 @@ async def get_courier_info(tgchat_id: int) -> (str, int):
 
         except ps.Error as p:
             logging.info(f"Произошла ошибка при выполнении запроса: {p}")
+        except TypeError:
+            current_order_number = "не назначена"
 
     time = dt.now().hour
     greeting = (
@@ -167,7 +169,7 @@ async def get_courier_info(tgchat_id: int) -> (str, int):
     hello_message = (f"👋🏼 {greeting}, {courier_name}!\n"
                      f"⭐ Ваш рейтинг: {Decimal(courier_rating).quantize(quantize).normalize()}.\n{advice}\n\n"
                      f"🛒 Общее количество выполненных доставок: {finished_order_count}\n"
-                     f"🛒 Текущая доставка: {current_order_number or "не назначена"}\n")
+                     f"🛒 Текущая доставка: {current_order_number}\n")
 
     return hello_message, courier_id
 
