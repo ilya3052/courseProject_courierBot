@@ -26,7 +26,7 @@ async def cmd_start(message: Message, state: FSMContext):
     with connect.cursor() as cur:
         try:
             get_user_id = sql.SQL("SELECT user_id FROM users WHERE user_tgchat_id = %s AND user_role = 'courier'")
-            user_id = cur.execute(get_user_id, (message.chat.id, )).fetchone()
+            user_id = cur.execute(get_user_id, (message.chat.id,)).fetchone()
         except ps.Error as p:
             await message.answer(f"Произошла ошибка при выполнении запроса: {p}")
             return
@@ -36,7 +36,7 @@ async def cmd_start(message: Message, state: FSMContext):
             try:
                 get_username = sql.SQL(
                     "SELECT user_name FROM users WHERE user_tgchat_id = %s AND user_role = 'courier'")
-                username = cur.execute(get_username, (message.chat.id, )).fetchone()[0]
+                username = cur.execute(get_username, (message.chat.id,)).fetchone()[0]
             except ps.Error as p:
                 await message.answer(f"Произошла ошибка при выполнении запроса: {p}")
                 return
@@ -106,11 +106,11 @@ def insert_data(data: dict) -> bool:
             cur.execute(
                 update_user, (
                     data['chat_id'], data['name'][1], data['name'][0],
-                    data['name'][2] if len(data['name']) > 2 else None, data['phonenumber'], data['chat_id_stub'], 
+                    data['name'][2] if len(data['name']) > 2 else None, data['phonenumber'], data['chat_id_stub'],
                 ))
             user_id = cur.fetchone()[0]
             cur.execute(insert_courier, (
-                user_id ,
+                user_id,
             ))
             connect.commit()
             logging.info("Запрос выполнен")
