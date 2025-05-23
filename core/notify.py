@@ -1,4 +1,4 @@
-from handlers.deliveries import get_notify, low_rating
+from handlers.channels_func import get_notify, low_rating
 from .database import Database
 
 
