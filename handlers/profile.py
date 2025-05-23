@@ -52,6 +52,13 @@ async def actions_handler(callback: CallbackQuery, state: FSMContext):
     await show_deliveries(callback, state, page)
 
 
+@router.message(~IsRegistered())
+@router.callback_query(~IsRegistered())
+async def reg_handler(update: Message | CallbackQuery, state: FSMContext):
+    message = update.message if isinstance(update, CallbackQuery) else update
+    await cmd_start(message, state)
+
+
 async def show_deliveries(callback: CallbackQuery, state: FSMContext, page: int = 0):
     connect: ps.connect = Database.get_connection()
     data = await state.get_data()
@@ -154,10 +161,3 @@ async def get_courier_info(tgchat_id: int) -> (str, int):
                      f"🛒 Текущая доставка: {current_order_number}\n")
 
     return hello_message, courier_id
-
-
-@router.message(~IsRegistered())
-@router.callback_query(~IsRegistered())
-async def reg_handler(update: Message | CallbackQuery, state: FSMContext):
-    message = update.message if isinstance(update, CallbackQuery) else update
-    await cmd_start(message, state)
