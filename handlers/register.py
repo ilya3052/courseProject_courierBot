@@ -22,35 +22,33 @@ class Register(StatesGroup):
 @router.message(StateFilter(None), Command("start"))
 async def cmd_start(message: Message, state: FSMContext):
     connect: ps.connect = Database.get_connection()
-    # проверка на существование пользователя
-    with connect.cursor() as cur:
-        try:
+    try:
+        with connect.cursor() as cur:
             get_user_id = sql.SQL("SELECT user_id FROM users WHERE user_tgchat_id = %s AND user_role = 'courier'")
             user_id = cur.execute(get_user_id, (message.chat.id,)).fetchone()
-        except ps.Error as p:
-            await message.answer(f"Произошла ошибка при выполнении запроса: {p}")
-            return
+    except ps.Error as p:
+        await message.answer(f"Произошла ошибка при выполнении запроса: {p}")
+        return
 
     if user_id:
-        with connect.cursor() as cur:
-            try:
+        try:
+            with connect.cursor() as cur:
                 get_username = sql.SQL(
                     "SELECT user_name FROM users WHERE user_tgchat_id = %s AND user_role = 'courier'")
                 username = cur.execute(get_username, (message.chat.id,)).fetchone()[0]
-            except ps.Error as p:
-                await message.answer(f"Произошла ошибка при выполнении запроса: {p}")
-                return
-        await message.answer(f"Добро пожаловать, {username}!")
-        return
-
-    # проверка на валидность ссылки
-    with connect.cursor() as cur:
-        try:
-            get_chat_id = sql.SQL("SELECT 1 FROM users WHERE user_tgchat_id = %s AND user_role = 'courier'")
-            is_link_valid = cur.execute(get_chat_id, (message.text.split()[1]), ).fetchone()
         except ps.Error as p:
             await message.answer(f"Произошла ошибка при выполнении запроса: {p}")
             return
+        await message.answer(f"Добро пожаловать, {username}!")
+        return
+
+    try:
+        with connect.cursor() as cur:
+            get_chat_id = sql.SQL("SELECT 1 FROM users WHERE user_tgchat_id = %s AND user_role = 'courier'")
+            is_link_valid = cur.execute(get_chat_id, (message.text.split()[1]), ).fetchone()
+    except ps.Error as p:
+        await message.answer(f"Произошла ошибка при выполнении запроса: {p}")
+        return
 
     if is_link_valid is None:
         await message.answer("Ссылка недействительна, пожалуйста, получите действующую у администратора")
@@ -101,8 +99,8 @@ def insert_data(data: dict) -> bool:
     insert_courier = (sql.SQL(
         "INSERT INTO courier (user_id) VALUES (%s);"
     ))
-    with connect.cursor() as cur:
-        try:
+    try:
+        with connect.cursor() as cur:
             cur.execute(
                 update_user, (
                     data['chat_id'], data['name'][1], data['name'][0],
@@ -115,10 +113,10 @@ def insert_data(data: dict) -> bool:
             connect.commit()
             logging.info("Запрос выполнен")
             return True
-        except ps.Error as e:
-            connect.rollback()
-            logging.critical(f"Запрос не выполнен. {e}")
-        except Exception as e:
-            connect.rollback()
-            logging.exception(f"При выполнении запроса произошла ошибка: {e}")
-            return False
+    except ps.Error as e:
+        connect.rollback()
+        logging.critical(f"Запрос не выполнен. {e}")
+    except Exception as e:
+        connect.rollback()
+        logging.exception(f"При выполнении запроса произошла ошибка: {e}")
+        return False

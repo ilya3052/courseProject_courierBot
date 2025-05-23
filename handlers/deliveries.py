@@ -76,13 +76,13 @@ FROM product p
     JOIN \"order\" o ON o.order_id = a.order_id 
 WHERE o.order_id = %s;"""))
 
-    with connect.cursor() as cur:
-        try:
+    try:
+        with connect.cursor() as cur:
             product_info = cur.execute(get_product_info, (order_id,)).fetchone()
             product_total_price = cur.execute(get_product_total_price, (order_id,)).fetchone()[0]
             products_list = cur.execute(get_product_list, (order_id,)).fetchall()
-        except ps.Error as p:
-            logging.exception(f"Произошла ошибка при выполнении запроса: {p}")
+    except ps.Error as p:
+        logging.exception(f"Произошла ошибка при выполнении запроса: {p}")
 
     order_desc = "Список товаров:\n"
 

@@ -65,11 +65,12 @@ async def show_deliveries(callback: CallbackQuery, state: FSMContext, page: int 
             ORDER BY d.delivery_rating;
     """
     ))
-    with connect.cursor() as cur:
-        try:
+    try:
+        with connect.cursor() as cur:
             deliveries_list = cur.execute(get_deliveries_list, (courier_id,)).fetchall()
-        except ps.Error as p:
-            logging.exception(f"Произошла ошибка при выполнении запроса: {p}")
+    except ps.Error as p:
+        logging.exception(f"Произошла ошибка при выполнении запроса: {p}")
+
     total = len(deliveries_list)
     max_page = max((total - 1) // page_size, 0)
     start = page * page_size
@@ -94,7 +95,7 @@ async def show_deliveries(callback: CallbackQuery, state: FSMContext, page: int 
     try:
         await callback.message.edit_text(
             text=f"Ваши доставки (стр. {page + 1}/{max_page + 1}):\n\n{msg_text}",
-            reply_markup=get_deliveries_kb()  # ← твоя клавиатура
+            reply_markup=get_deliveries_kb()
         )
     except TelegramBadRequest as TBR:
         logging.exception(f"Произошла ошибка при выполнении запроса {TBR}")
@@ -119,19 +120,18 @@ async def get_courier_info(tgchat_id: int) -> (str, int):
         "SELECT d.delivery_id FROM delivery d JOIN \"order\" o ON d.order_id = o.order_id WHERE o.order_status = 1 AND d.courier_id = %s"
     ))
 
-    with connect.cursor() as cur:
-        try:
+    try:
+        with connect.cursor() as cur:
             courier_id = cur.execute(get_courier_id, (tgchat_id,)).fetchone()[0]
             courier_name = cur.execute(get_courier_name, (tgchat_id,)).fetchone()[0]
             courier_rating = cur.execute(get_courier_rating, (courier_id,)).fetchone()[0]
 
             finished_order_count = cur.execute(get_finished_order_count, (courier_id,)).fetchone()[0]
             current_order_number = cur.execute(get_current_order_number, (courier_id,)).fetchone()[0]
-
-        except ps.Error as p:
-            logging.info(f"Произошла ошибка при выполнении запроса: {p}")
-        except TypeError:
-            current_order_number = "не назначена"
+    except ps.Error as p:
+        logging.info(f"Произошла ошибка при выполнении запроса: {p}")
+    except TypeError:
+        current_order_number = "не назначена"
 
     time = dt.now().hour
     greeting = (
