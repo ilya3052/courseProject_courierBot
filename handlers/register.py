@@ -55,8 +55,8 @@ async def cmd_start(message: Message, state: FSMContext):
     else:
         await message.answer("Введите имя в формате ФИО (отчество при наличии)")
         await state.set_state(Register.enter_name)
-        await state.update_data(chat_id_stub=message.text.split()[1])
-        await state.update_data(chat_id=message.chat.id)
+        await state.update_data(chat_id_stub=message.text.split()[1], chat_id=message.chat.id,
+                                username=message.from_user.username)
         logging.info("Введено имя")
 
 
@@ -92,7 +92,7 @@ async def insert_data(data: dict) -> bool:
                            .replace('+', ''))
     update_user = (sql.SQL(
         """UPDATE users 
-            SET user_tgchat_id = %s, user_name = %s, user_surname = %s, user_patronymic = %s, user_phonenumber = %s 
+            SET user_tgchat_id = %s, user_name = %s, user_surname = %s, user_patronymic = %s, user_phonenumber = %s, user_tg_username = %s 
             WHERE user_tgchat_id = %s
             RETURNING user_id;"""
     ))
@@ -104,7 +104,7 @@ async def insert_data(data: dict) -> bool:
             cur.execute(
                 update_user, (
                     data['chat_id'], data['name'][1], data['name'][0],
-                    data['name'][2] if len(data['name']) > 2 else None, data['phonenumber'], data['chat_id_stub'],
+                    data['name'][2] if len(data['name']) > 2 else None, data['phonenumber'], data['username'], data['chat_id_stub'],
                 ))
             user_id = cur.fetchone()[0]
             cur.execute(insert_courier, (
