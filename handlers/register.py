@@ -78,6 +78,7 @@ async def enter_phonenumber(message: Message, state: FSMContext):
         if await insert_data(data):
             logging.info("Регистрация завершена")
             await message.answer(f"Регистрация завершена. Можете приступать к работе.")
+            await Database.notify_channel('courier_is_registered', '')
         else:
             await message.answer("Регистрация не завершена, попробуйте еще раз получив у администратора новую ссылку!")
     else:
