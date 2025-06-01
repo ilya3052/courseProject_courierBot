@@ -5,7 +5,6 @@ from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
-from icecream import ic
 from psycopg import sql
 from psycopg.errors import LockNotAvailable
 
@@ -31,7 +30,6 @@ async def order_accept_handler(callback: CallbackQuery):
     try:
         with connect.cursor() as cur:
             status = cur.execute("SELECT accept_order(%s, %s)", (callback.message.chat.id, order_id,)).fetchone()[0]
-            ic(status)
             if status == 1:
                 raise LockNotAvailable()
             await callback.answer()
