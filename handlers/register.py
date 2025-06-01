@@ -7,6 +7,7 @@ from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import Message
+from icecream import ic
 from psycopg import sql
 
 from core.database import Database
@@ -45,7 +46,7 @@ async def cmd_start(message: Message, state: FSMContext):
     try:
         with connect.cursor() as cur:
             get_chat_id = sql.SQL("SELECT 1 FROM users WHERE user_tgchat_id = %s AND user_role = 'courier'")
-            is_link_valid = cur.execute(get_chat_id, (message.text.split()[1]), ).fetchone()
+            is_link_valid = cur.execute(get_chat_id, (message.text.split()[1], )).fetchone()
     except ps.Error as p:
         await message.answer(f"Произошла ошибка при выполнении запроса: {p}")
         return

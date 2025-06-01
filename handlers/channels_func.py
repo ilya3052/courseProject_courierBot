@@ -9,12 +9,10 @@ from handlers.deliveries import send_notify
 
 async def get_notify(conn, pid, channel, payload):
     order_id = int(str(payload).split(":")[1].strip())
-    print(f"[{channel}] => {payload} => {order_id}")
     await send_notify(order_id)
 
 
 async def low_rating(conn, pid, channel, payload):
-    print(f"[{channel}] => {payload}")
     connect: ps.connect = Database.get_connection()
     try:
         with connect.cursor() as cur:
