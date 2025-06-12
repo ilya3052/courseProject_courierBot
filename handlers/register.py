@@ -7,7 +7,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import Message
 from asyncpg import PostgresError
-from psycopg import sql
 
 from core.database import db
 

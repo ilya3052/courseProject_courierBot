@@ -1,18 +1,15 @@
 import logging
 
-import psycopg as ps
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 from asyncpg import PostgresError
-from icecream import ic
-from psycopg import sql
 from psycopg.errors import LockNotAvailable
 
 from Filters.IsRegistered import IsRegistered
 from core.bot_instance import bot
-from core.database import Database, db
+from core.database import db
 from keyboards import get_order_notify_kb
 from .register import cmd_start
 
@@ -25,13 +22,13 @@ class Deliveries(StatesGroup):
 
 @router.callback_query(F.data.startswith("action_accept"), IsRegistered())
 async def order_accept_handler(callback: CallbackQuery):
-
     order_id = callback.data.split(":")[1]
 
     try:
         async with db.pool.acquire() as connection:
             async with connection.transaction():
-                status = await db.execute("SELECT accept_order($1, $2)", callback.message.chat.id, order_id, fetchval=True)
+                status = await db.execute("SELECT accept_order($1, $2)", callback.message.chat.id, order_id,
+                                          fetchval=True)
                 if status == 1:
                     raise LockNotAvailable()
                 await callback.answer()
@@ -55,14 +52,13 @@ async def reg_handler(update: Message | CallbackQuery, state: FSMContext):
 
 
 async def send_notify(order_id: int):
-
     free_couriers = await get_free_couriers()
 
     if not free_couriers:
         await db.notify_channel("order_status", f"action: order_not_accept; order_id: {order_id}")
         return
 
-    get_product_info ="""SELECT COUNT(*), o.order_address 
+    get_product_info = """SELECT COUNT(*), o.order_address 
 FROM \"order\" o 
     JOIN added a on o.order_id = a.order_id 
     WHERE o.order_id = $1

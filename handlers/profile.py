@@ -2,7 +2,6 @@ import logging
 from datetime import datetime as dt
 from decimal import Decimal
 
-import psycopg as ps
 from aiogram import Router, F
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, StateFilter
@@ -10,11 +9,9 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import Message, CallbackQuery
 from asyncpg import PostgresError
-from icecream import ic
-from psycopg import sql
 
 from Filters.IsRegistered import IsRegistered
-from core.database import Database, db
+from core.database import db
 from keyboards import get_profile_kb, get_deliveries_kb
 from .register import cmd_start
 
@@ -62,7 +59,6 @@ async def reg_handler(update: Message | CallbackQuery, state: FSMContext):
 
 
 async def show_deliveries(callback: CallbackQuery, state: FSMContext, page: int = 0):
-
     data = await state.get_data()
     courier_id = data.get('courier_id')
     get_deliveries_list = """SELECT delivery.delivery_id, o.order_status, COUNT(a.product_article), 
@@ -109,7 +105,6 @@ async def show_deliveries(callback: CallbackQuery, state: FSMContext, page: int 
 
 
 async def get_courier_info(tgchat_id: int) -> (str, int):
-
     get_courier_id = "SELECT courier_id FROM courier c JOIN users u ON c.user_id = u.user_id WHERE u.user_tgchat_id = $1"
 
     get_courier_name = "SELECT user_name FROM users WHERE user_tgchat_id = $1 AND user_role = 'courier';"

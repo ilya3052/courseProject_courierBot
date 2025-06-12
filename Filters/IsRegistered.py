@@ -3,7 +3,7 @@ import logging
 from aiogram.filters import BaseFilter
 from aiogram.types import Message
 
-from core.database import Database, db  # ваша обертка для asyncpg
+from core.database import db  # ваша обертка для asyncpg
 
 
 class IsRegistered(BaseFilter):
