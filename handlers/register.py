@@ -1,16 +1,15 @@
 import logging
 import re
 
-import psycopg as ps
 from aiogram import Router
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import Message
-from icecream import ic
+from asyncpg import PostgresError
 from psycopg import sql
 
-from core.database import Database
+from core.database import db
 
 router = Router()
 
@@ -22,33 +21,28 @@ class Register(StatesGroup):
 
 @router.message(StateFilter(None), Command("start"))
 async def cmd_start(message: Message, state: FSMContext):
-    connect: ps.connect = Database.get_connection()
+    get_user_id = "SELECT user_id FROM users WHERE user_tgchat_id = $1 AND user_role = 'courier'"
     try:
-        with connect.cursor() as cur:
-            get_user_id = sql.SQL("SELECT user_id FROM users WHERE user_tgchat_id = %s AND user_role = 'courier'")
-            user_id = cur.execute(get_user_id, (message.chat.id,)).fetchone()
-    except ps.Error as p:
-        await message.answer(f"Произошла ошибка при выполнении запроса: {p}")
+        user_id = await db.execute(get_user_id, message.chat.id, fetchval=True)
+    except PostgresError as p:
+        logging.exception(f"Произошла ошибка при выполнении запроса: {p}")
         return
 
     if user_id:
         try:
-            with connect.cursor() as cur:
-                get_username = sql.SQL(
-                    "SELECT user_name FROM users WHERE user_tgchat_id = %s AND user_role = 'courier'")
-                username = cur.execute(get_username, (message.chat.id,)).fetchone()[0]
-        except ps.Error as p:
-            await message.answer(f"Произошла ошибка при выполнении запроса: {p}")
+            get_username = "SELECT user_name FROM users WHERE user_tgchat_id = $1 AND user_role = 'courier'"
+            username = await db.execute(get_username, message.chat.id, fetchval=True)
+        except PostgresError as p:
+            logging.exception(f"Произошла ошибка при выполнении запроса: {p}")
             return
         await message.answer(f"Добро пожаловать, {username}!")
         return
 
     try:
-        with connect.cursor() as cur:
-            get_chat_id = sql.SQL("SELECT 1 FROM users WHERE user_tgchat_id = %s AND user_role = 'courier'")
-            is_link_valid = cur.execute(get_chat_id, (message.text.split()[1], )).fetchone()
-    except ps.Error as p:
-        await message.answer(f"Произошла ошибка при выполнении запроса: {p}")
+        get_chat_id = "SELECT 1 FROM users WHERE user_tgchat_id = $1 AND user_role = 'courier'"
+        is_link_valid = await db.execute(get_chat_id, int(message.text.split()[1]), fetchval=True)
+    except PostgresError as p:
+        logging.exception(f"Произошла ошибка при выполнении запроса: {p}")
         return
 
     if is_link_valid is None:
@@ -79,7 +73,7 @@ async def enter_phonenumber(message: Message, state: FSMContext):
         if await insert_data(data):
             logging.info("Регистрация завершена")
             await message.answer(f"Регистрация завершена. Можете приступать к работе.")
-            await Database.notify_channel('courier_is_registered', '')
+            await db.notify_channel('courier_is_registered', '')
         else:
             await message.answer("Регистрация не завершена, попробуйте еще раз получив у администратора новую ссылку!")
     else:
@@ -87,38 +81,30 @@ async def enter_phonenumber(message: Message, state: FSMContext):
 
 
 async def insert_data(data: dict) -> bool:
-    connect: ps.connect = Database.get_connection()
     data['phonenumber'] = (data['phonenumber'].replace('(', '')
                            .replace(')', '')
                            .replace('-', '')
                            .replace('+', ''))
-    update_user = (sql.SQL(
-        """UPDATE users 
-            SET user_tgchat_id = %s, user_name = %s, user_surname = %s, user_patronymic = %s, user_phonenumber = %s, user_tg_username = %s 
-            WHERE user_tgchat_id = %s
+    update_user = """UPDATE users 
+            SET user_tgchat_id = $1, user_name = $2, user_surname = $3, user_patronymic = $4, user_phonenumber = $5, user_tg_username = $6 
+            WHERE user_tgchat_id = $7
             RETURNING user_id;"""
-    ))
-    insert_courier = (sql.SQL(
-        "INSERT INTO courier (user_id) VALUES (%s);"
-    ))
+    insert_courier = "INSERT INTO courier (user_id) VALUES ($1);"
     try:
-        with connect.cursor() as cur:
-            cur.execute(
-                update_user, (
+        async with db.pool.acquire() as connection:
+            async with connection.transaction():
+                user_id = await db.execute(
+                    update_user,
                     data['chat_id'], data['name'][1], data['name'][0],
-                    data['name'][2] if len(data['name']) > 2 else None, data['phonenumber'], data['username'], data['chat_id_stub'],
-                ))
-            user_id = cur.fetchone()[0]
-            cur.execute(insert_courier, (
-                user_id,
-            ))
-            connect.commit()
-            logging.info("Запрос выполнен")
-            return True
-    except ps.Error as e:
-        connect.rollback()
+                    data['name'][2] if len(data['name']) > 2 else None, data['phonenumber'], data['username'],
+                    int(data['chat_id_stub']), fetchval=True
+                )
+                await db.execute(insert_courier, user_id, execute=True)
+                logging.info("Запрос выполнен")
+                return True
+    except PostgresError as e:
         logging.critical(f"Запрос не выполнен. {e}")
+        return False
     except Exception as e:
-        connect.rollback()
         logging.exception(f"При выполнении запроса произошла ошибка: {e}")
         return False

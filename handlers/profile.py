@@ -9,10 +9,12 @@ from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import Message, CallbackQuery
+from asyncpg import PostgresError
+from icecream import ic
 from psycopg import sql
 
 from Filters.IsRegistered import IsRegistered
-from core.database import Database
+from core.database import Database, db
 from keyboards import get_profile_kb, get_deliveries_kb
 from .register import cmd_start
 
@@ -60,23 +62,20 @@ async def reg_handler(update: Message | CallbackQuery, state: FSMContext):
 
 
 async def show_deliveries(callback: CallbackQuery, state: FSMContext, page: int = 0):
-    connect: ps.connect = Database.get_connection()
+
     data = await state.get_data()
     courier_id = data.get('courier_id')
-    get_deliveries_list = (sql.SQL(
-        """SELECT d.delivery_id, o.order_status, COUNT(a.product_article), 
-            CASE WHEN o.order_status = 2 THEN d.delivery_rating::VARCHAR ELSE 'Доставка не завершена' END AS rating 
-            FROM delivery d JOIN "order" o ON d.order_id = o.order_id 
-            JOIN added a ON o.order_id = a.order_id WHERE d.courier_id = %s
-            GROUP BY d.delivery_id, o.order_status
-            ORDER BY d.delivery_rating;
-    """
-    ))
+    get_deliveries_list = """SELECT delivery.delivery_id, o.order_status, COUNT(a.product_article), 
+            CASE WHEN o.order_status = 2 THEN delivery.delivery_rating::VARCHAR ELSE 'Доставка не завершена' END AS rating 
+            FROM delivery delivery JOIN "order" o ON delivery.order_id = o.order_id 
+            JOIN added a ON o.order_id = a.order_id WHERE delivery.courier_id = $1
+            GROUP BY delivery.delivery_id, o.order_status
+            ORDER BY delivery.delivery_rating;"""
     try:
-        with connect.cursor() as cur:
-            deliveries_list = cur.execute(get_deliveries_list, (courier_id,)).fetchall()
-    except ps.Error as p:
+        deliveries_list = await db.execute(get_deliveries_list, courier_id, fetch=True)
+    except PostgresError as p:
         logging.exception(f"Произошла ошибка при выполнении запроса: {p}")
+        return
 
     total = len(deliveries_list)
     max_page = max((total - 1) // page_size, 0)
@@ -89,11 +88,11 @@ async def show_deliveries(callback: CallbackQuery, state: FSMContext, page: int 
         return
 
     msg_lines = [
-        f"Доставка №{d[0]}\n"
-        f"\t\tСтатус: {("В пути" if d[1] == 1 else "Доставлена получателю")}\n"
-        f"\t\tКоличество товаров: {d[2]}"
-        f"{f"\n\t\tОценка: {d[3]}" if d[1] == 2 else ""}"
-        for d in page_data
+        f"Доставка №{delivery['delivery_id']}\n"
+        f"\t\tСтатус: {("В пути" if delivery['order_status'] == 1 else "Доставлена получателю")}\n"
+        f"\t\tКоличество товаров: {delivery['count']}"
+        f"{f"\n\t\tОценка: {delivery['rating']}" if delivery['order_status'] == 2 else ""}"
+        for delivery in page_data
     ]
     msg_text = "\n\n".join(msg_lines)
 
@@ -110,35 +109,27 @@ async def show_deliveries(callback: CallbackQuery, state: FSMContext, page: int 
 
 
 async def get_courier_info(tgchat_id: int) -> (str, int):
-    connect: ps.connect = Database.get_connection()
 
-    get_courier_id = sql.SQL(
-        "SELECT courier_id FROM courier c JOIN users u ON c.user_id = u.user_id WHERE u.user_tgchat_id = %s")
+    get_courier_id = "SELECT courier_id FROM courier c JOIN users u ON c.user_id = u.user_id WHERE u.user_tgchat_id = $1"
 
-    get_courier_name = sql.SQL("SELECT user_name FROM users WHERE user_tgchat_id = %s AND user_role = 'courier';")
+    get_courier_name = "SELECT user_name FROM users WHERE user_tgchat_id = $1 AND user_role = 'courier';"
 
-    get_finished_order_count = (sql.SQL(
-        "SELECT COUNT(*) FROM \"order\" o JOIN delivery d on o.order_id = d.order_id WHERE d.courier_id = %s AND o.order_status = 2;"
-    ))
+    get_finished_order_count = "SELECT COUNT(*) FROM \"order\" o JOIN delivery d on o.order_id = d.order_id WHERE d.courier_id = $1 AND o.order_status = 2;"
 
-    get_courier_rating = sql.SQL("SELECT courier_rating FROM courier WHERE courier_id = %s;")
+    get_courier_rating = "SELECT courier_rating FROM courier WHERE courier_id = $1;"
 
-    get_current_order_number = (sql.SQL(
-        "SELECT d.delivery_id FROM delivery d JOIN \"order\" o ON d.order_id = o.order_id WHERE o.order_status = 1 AND d.courier_id = %s"
-    ))
+    get_current_order_number = "SELECT d.delivery_id FROM delivery d JOIN \"order\" o ON d.order_id = o.order_id WHERE o.order_status = 1 AND d.courier_id = $1"
 
     try:
-        with connect.cursor() as cur:
-            courier_id = cur.execute(get_courier_id, (tgchat_id,)).fetchone()[0]
-            courier_name = cur.execute(get_courier_name, (tgchat_id,)).fetchone()[0]
-            courier_rating = cur.execute(get_courier_rating, (courier_id,)).fetchone()[0]
+        courier_id = await db.execute(get_courier_id, tgchat_id, fetchval=True)
+        courier_name = await db.execute(get_courier_name, tgchat_id, fetchval=True)
+        courier_rating = await db.execute(get_courier_rating, courier_id, fetchval=True)
 
-            finished_order_count = cur.execute(get_finished_order_count, (courier_id,)).fetchone()[0]
-            current_order_number = cur.execute(get_current_order_number, (courier_id,)).fetchone()[0]
-    except ps.Error as p:
+        finished_order_count = await db.execute(get_finished_order_count, courier_id, fetchval=True)
+        current_order_number = await db.execute(get_current_order_number, courier_id, fetchval=True)
+    except PostgresError as p:
         logging.info(f"Произошла ошибка при выполнении запроса: {p}")
-    except TypeError:
-        current_order_number = "не назначена"
+        return
 
     time = dt.now().hour
     greeting = (
@@ -158,6 +149,6 @@ async def get_courier_info(tgchat_id: int) -> (str, int):
     hello_message = (f"👋🏼 {greeting}, {courier_name}!\n"
                      f"⭐ Ваш рейтинг: {Decimal(courier_rating).quantize(quantize).normalize()}.\n{advice}\n\n"
                      f"🛒 Общее количество выполненных доставок: {finished_order_count}\n"
-                     f"🛒 Текущая доставка: {current_order_number}\n")
+                     f"🛒 Текущая доставка: {current_order_number or 'Не назначена'}\n")
 
     return hello_message, courier_id

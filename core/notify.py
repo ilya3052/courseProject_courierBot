@@ -1,7 +1,7 @@
 from handlers.channels_func import get_notify, low_rating
-from .database import Database
+from .database import db
 
 
 async def setup_notifications():
-    await Database.listen_channel("create_order", get_notify)
-    await Database.listen_channel("low_rating", low_rating)
+    await db.listen_channel("create_order", get_notify)
+    await db.listen_channel("low_rating", low_rating)
