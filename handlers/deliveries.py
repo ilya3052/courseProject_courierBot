@@ -5,7 +5,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 from asyncpg import PostgresError
-from psycopg.errors import LockNotAvailable
 
 from Filters.IsRegistered import IsRegistered
 from core.bot_instance import bot
@@ -30,10 +29,10 @@ async def order_accept_handler(callback: CallbackQuery):
                 status = await db.execute("SELECT accept_order($1, $2)", callback.message.chat.id, order_id,
                                           fetchval=True)
                 if status == 1:
-                    raise LockNotAvailable()
+                    raise Warning()
                 await callback.answer()
                 await db.notify_channel("order_status", f'action: order_accept; order_id: {order_id}')
-    except LockNotAvailable:
+    except Warning:
         await callback.answer("Заказ уже принят другим курьером!")
 
     await callback.answer()
