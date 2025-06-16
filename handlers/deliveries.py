@@ -10,6 +10,8 @@ from asyncpg import PostgresError
 from Filters.IsRegistered import IsRegistered
 from core.bot_instance import bot
 from core.database import db
+from exceptions.MaxOrderCount import MaxOrderCount
+from exceptions.OrderIsAccept import OrderIsAccept
 from keyboards import get_order_notify_kb
 from .register import cmd_start
 
@@ -30,16 +32,16 @@ async def order_accept_handler(callback: CallbackQuery):
                 status = await db.execute("SELECT accept_order($1, $2)", callback.message.chat.id, order_id,
                                           fetchval=True)
                 if status == 1:
-                    raise Warning()
+                    raise OrderIsAccept()
                 elif status == 2:
-                    raise Error()
+                    raise MaxOrderCount()
 
                 await callback.answer()
                 await db.notify_channel("order_status", f'action: order_accept; order_id: {order_id}')
 
-    except Warning:
+    except OrderIsAccept:
         await callback.answer("Заказ уже принят другим курьером!")
-    except Error:
+    except MaxOrderCount:
         await callback.answer("Вы уже приняли максимальное количество заказов!")
 
     await callback.answer()
