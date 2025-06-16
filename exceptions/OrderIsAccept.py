@@ -1,0 +1,2 @@
+class OrderIsAccept(Exception):
+    pass
