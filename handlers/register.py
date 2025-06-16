@@ -85,7 +85,7 @@ async def insert_data(data: dict) -> bool:
                            .replace('-', '')
                            .replace('+', ''))
     update_user = """UPDATE users 
-            SET user_tgchat_id = $1, user_name = $2, user_surname = $3, user_patronymic = $4, user_phonenumber = $5, user_tg_username = $6 
+            SET user_tgchat_id = $1, user_name = $2, user_surname = $3, user_patronymic = $4, user_phonenumber = $5, user_shortlink = $6 
             WHERE user_tgchat_id = $7
             RETURNING user_id;"""
     insert_courier = "INSERT INTO courier (user_id) VALUES ($1);"

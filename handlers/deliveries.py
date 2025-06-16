@@ -1,4 +1,5 @@
 import logging
+from binascii import Error
 
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
@@ -21,7 +22,7 @@ class Deliveries(StatesGroup):
 
 @router.callback_query(F.data.startswith("action_accept"), IsRegistered())
 async def order_accept_handler(callback: CallbackQuery):
-    order_id = callback.data.split(":")[1]
+    order_id = int(callback.data.split(":")[1])
 
     try:
         async with db.pool.acquire() as connection:
@@ -30,10 +31,16 @@ async def order_accept_handler(callback: CallbackQuery):
                                           fetchval=True)
                 if status == 1:
                     raise Warning()
+                elif status == 2:
+                    raise Error()
+
                 await callback.answer()
                 await db.notify_channel("order_status", f'action: order_accept; order_id: {order_id}')
+
     except Warning:
         await callback.answer("Заказ уже принят другим курьером!")
+    except Error:
+        await callback.answer("Вы уже приняли максимальное количество заказов!")
 
     await callback.answer()
 
@@ -105,7 +112,7 @@ async def get_free_couriers() -> None | list:
             """SELECT u.user_tgchat_id 
                     FROM courier c 
                     JOIN users u ON c.user_id = u.user_id 
-                WHERE c.courier_is_busy_with_order = false AND u.user_role = 'courier';""", fetch=True)
+                AND u.user_role = 'courier';""", fetch=True)
     except PostgresError as p:
         logging.exception(f"Произошла ошибка при выполнении запроса: {p}")
         return None
