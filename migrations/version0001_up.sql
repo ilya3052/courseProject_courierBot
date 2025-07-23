@@ -59,7 +59,7 @@ create table delivery (
 
 alter table delivery
    add constraint PK_DELIVERY primary key (delivery_id);
-*/
+
 create unique index delivery_PK on delivery (
 delivery_id
 );
