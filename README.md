@@ -1,6 +1,6 @@
 # Использование
 ```bash
-git clone https://github.com/ilya3052/courseProject_courierBot.git
+git clone https://github.com/ilya3052/courierBot.git
 
 cd courseProject_courierBot
 
